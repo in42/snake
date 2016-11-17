@@ -1,0 +1,4 @@
+when quickly pressing two arrow keys, one can reverse the direction of the
+snake
+E.g. Snake moving right, left direction should not be accepted.
+However I can press up and left quickly to change the direction to left.
