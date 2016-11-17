@@ -3,10 +3,45 @@
 #include <stdlib.h>
 #include <stdbool.h>
 
-#define CELL_SIZE 10
-
 #define SCREEN_WIDTH 640
 #define SCREEN_HEIGHT 480
+
+// 4:3 aspect ratio is assumed
+#define FIELD_CELL_WIDTH 64
+#define CELL_SIZE ((SCREEN_WIDTH) / (FIELD_CELL_WIDTH))
+#define FIELD_CELL_HEIGHT 48
+
+#define FIELD_START_CELL_X 0
+#define FIELD_START_CELL_Y 0
+
+
+void draw_field(SDL_Renderer *renderer)
+{
+	Uint8 r, g, b, a;
+	SDL_GetRenderDrawColor(renderer, &r, &g, &b, &a);
+
+	SDL_SetRenderDrawColor(renderer, 0, 0, 100, 255);
+	SDL_Rect field = {
+		FIELD_START_CELL_X * CELL_SIZE,
+		FIELD_START_CELL_Y * CELL_SIZE,
+		FIELD_CELL_WIDTH * CELL_SIZE,
+		FIELD_CELL_HEIGHT * CELL_SIZE
+	};
+
+	SDL_RenderFillRect(renderer, &field);
+	SDL_SetRenderDrawColor(renderer, 0, 0, 150, 255);
+	for (int i = 1; i < FIELD_CELL_WIDTH; i++) {
+		SDL_RenderDrawLine(renderer, i * CELL_SIZE, 0,
+				i * CELL_SIZE, FIELD_CELL_HEIGHT * CELL_SIZE);
+	}
+	for (int i = 1; i < FIELD_CELL_HEIGHT; i++) {
+		SDL_RenderDrawLine(renderer, 0, i * CELL_SIZE,
+				FIELD_CELL_WIDTH * CELL_SIZE, i * CELL_SIZE);
+	}
+
+	SDL_SetRenderDrawColor(renderer, r, g, b, a);
+}
+
 
 typedef enum dir {
 	UP,
@@ -108,7 +143,7 @@ void snake_draw(SDL_Renderer *renderer)
 			CELL_SIZE, CELL_SIZE };
 		SDL_RenderFillRect(renderer, &cell);
 
-		SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+		SDL_SetRenderDrawColor(renderer, 0, 0, 180, 255);
 		SDL_RenderDrawRect(renderer, &cell);
 		SDL_SetRenderDrawColor(renderer, 0, 0, 255, 255);
 	}
@@ -130,6 +165,18 @@ void snake_set_dir(Dir dir)
 	if (snake.size != 0) {
 		snake.segments[0].dir = dir;
 	}
+}
+
+void draw_screen(SDL_Renderer *renderer)
+{
+	SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+	SDL_RenderClear(renderer);
+	SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+	SDL_RenderDrawLine(renderer, SCREEN_WIDTH - 1, 0, SCREEN_WIDTH - 1,
+			SCREEN_HEIGHT);
+	SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+	draw_field(renderer);
+	snake_draw(renderer);
 }
 
 int main()
@@ -156,6 +203,8 @@ int main()
 
 	int quit = 0;
 	snake_init(5, 100, 100, RIGHT);
+	draw_screen(renderer);
+	bool last_move_drawn = true;
 	while (!quit) {
 		SDL_Event event;
 		while (SDL_PollEvent(&event)) {
@@ -169,23 +218,27 @@ int main()
 					quit = 1;
 					break;
 				case SDLK_UP:
-					if (snake_get_dir() != DOWN) {
+					if (snake_get_dir() != DOWN && last_move_drawn) {
 						snake_set_dir(UP);
+						last_move_drawn = false;
 					}
 					break;
 				case SDLK_DOWN:
-					if (snake_get_dir() != UP) {
+					if (snake_get_dir() != UP && last_move_drawn) {
 						snake_set_dir(DOWN);
+						last_move_drawn = false;
 					}
 					break;
 				case SDLK_LEFT:
-					if (snake_get_dir() != RIGHT) {
+					if (snake_get_dir() != RIGHT && last_move_drawn) {
 						snake_set_dir(LEFT);
+						last_move_drawn = false;
 					}
 					break;
 				case SDLK_RIGHT:
-					if (snake_get_dir() != LEFT) {
+					if (snake_get_dir() != LEFT && last_move_drawn) {
 						snake_set_dir(RIGHT);
+						last_move_drawn = false;
 					}
 					break;
 				default:
@@ -198,15 +251,10 @@ int main()
 		}
 
 		snake_move(snake);
+		last_move_drawn = true;
 
 		SDL_Delay(100);
-		SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-		SDL_RenderClear(renderer);
-		SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
-		SDL_RenderDrawLine(renderer, SCREEN_WIDTH - 1, 0, SCREEN_WIDTH - 1,
-				SCREEN_HEIGHT);
-		SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-		snake_draw(renderer);
+		draw_screen(renderer);
 		SDL_RenderPresent(renderer);
 	}
 
