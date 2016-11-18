@@ -7,13 +7,14 @@
 #define SCREEN_HEIGHT 480
 
 // 4:3 aspect ratio is assumed
-#define FIELD_CELL_WIDTH 64
+//
+// FIELD_CELL_WIDTH has to divisible by 4, will have to divide SCREEN_WIDTH
+#define FIELD_CELL_WIDTH 16
 #define CELL_SIZE ((SCREEN_WIDTH) / (FIELD_CELL_WIDTH))
-#define FIELD_CELL_HEIGHT 48
+#define FIELD_CELL_HEIGHT ((FIELD_CELL_WIDTH) / 4 * 3)
 
 #define FIELD_START_CELL_X 0
 #define FIELD_START_CELL_Y 0
-
 
 void draw_field(SDL_Renderer *renderer)
 {
@@ -42,6 +43,7 @@ void draw_field(SDL_Renderer *renderer)
 	SDL_SetRenderDrawColor(renderer, r, g, b, a);
 }
 
+bool is_cell_occupied[FIELD_CELL_HEIGHT][FIELD_CELL_WIDTH];
 
 typedef enum dir {
 	UP,
@@ -51,36 +53,36 @@ typedef enum dir {
 	NONE
 } Dir;
 
-// change in dx, dy when one moves in that direction by one cell
-void get_dx_dy(int *dx, int *dy, Dir dir)
+// change in rows and cols when one moves in that direction by one cell
+void get_dr_dc(int *dr, int *dc, Dir dir)
 {
 	switch (dir) {
 	case UP:
-		*dx = 0;
-		*dy = -CELL_SIZE;
+		*dr = -1;
+		*dc = 0;
 		break;
 	case DOWN:
-		*dx = 0;
-		*dy = CELL_SIZE;
+		*dr = 1;
+		*dc = 0;
 		break;
 	case RIGHT:
-		*dx = CELL_SIZE;
-		*dy = 0;
+		*dr = 0;
+		*dc = 1;
 		break;
 	case LEFT:
-		*dx = -CELL_SIZE;
-		*dy = 0;
+		*dr = 0;
+		*dc = -1;
 		break;
 	default:
-		*dx = 0;
-		*dy = 0;
+		*dr = 0;
+		*dc = 0;
 		break;
 	}
 }
 
 typedef struct snake_segment {
-	int x;
-	int y;
+	int r;
+	int c;
 	Dir dir;
 
 	// struct snake_segment *next;
@@ -101,31 +103,33 @@ void init_snake_segment(int i)
 	snake.segments[i] = (SnakeSegment){ 0, 0, RIGHT };
 }
 
-void snake_init(int size, int x, int y, Dir dir)
+void snake_init(int size, int r, int c, Dir dir)
 {
 	snake.size = size;
 	for (int i = 0; i < size; i++) {
 		if (i == 0) {
-			snake.segments[i].x = x;
-			snake.segments[i].y = y;
+			snake.segments[i].r = r;
+			snake.segments[i].c = c;
 		} else {
-			int dx, dy;
-			get_dx_dy(&dx, &dy, snake.segments[i - 1].dir);
-			snake.segments[i].x = snake.segments[i - 1].x - dx;
-			snake.segments[i].y = snake.segments[i - 1].y - dy;
+			int dr, dc;
+			get_dr_dc(&dr, &dc, snake.segments[i - 1].dir);
+			snake.segments[i].r = snake.segments[i - 1].r - dr;
+			snake.segments[i].c = snake.segments[i - 1].c - dc;
 		}
 		snake.segments[i].dir = dir;
+		is_cell_occupied[snake.segments[i].r][snake.segments[i].c] = true;
 	}
 }
 
 void snake_move()
 {
 	for (int i = 0; i < snake.size; i++) {
-		int dx, dy;
-		get_dx_dy(&dx, &dy, snake.segments[i].dir);
-		snake.segments[i].x += dx;
-		snake.segments[i].y += dy;
-
+		is_cell_occupied[snake.segments[i].r][snake.segments[i].c] = false;
+		int dr, dc;
+		get_dr_dc(&dr, &dc, snake.segments[i].dir);
+		snake.segments[i].r += dr;
+		snake.segments[i].c += dc;
+		is_cell_occupied[snake.segments[i].r][snake.segments[i].c] = true;
 	}
 
 	for (int i = snake.size - 1; i >= 1; i--) {
@@ -139,8 +143,10 @@ void snake_draw(SDL_Renderer *renderer)
 	SDL_GetRenderDrawColor(renderer, &r, &g, &b, &a);
 	SDL_SetRenderDrawColor(renderer, 0, 0, 255, 255);
 	for (int i = 0; i < snake.size; i++) {
-		SDL_Rect cell = { snake.segments[i].x, snake.segments[i].y,
-			CELL_SIZE, CELL_SIZE };
+		SDL_Rect cell = { snake.segments[i].c * CELL_SIZE,
+			snake.segments[i].r * CELL_SIZE,
+			CELL_SIZE, CELL_SIZE
+		};
 		SDL_RenderFillRect(renderer, &cell);
 
 		SDL_SetRenderDrawColor(renderer, 0, 0, 180, 255);
@@ -167,17 +173,28 @@ void snake_set_dir(Dir dir)
 	}
 }
 
+typedef struct apple {
+	int r;
+	int c;
+} Apple;
+
+Apple apple;
+
 void draw_screen(SDL_Renderer *renderer)
 {
 	SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
 	SDL_RenderClear(renderer);
 	SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
-	SDL_RenderDrawLine(renderer, SCREEN_WIDTH - 1, 0, SCREEN_WIDTH - 1,
-			SCREEN_HEIGHT);
+	// SDL_RenderDrawLine(renderer, SCREEN_WIDTH - 1, 0, SCREEN_WIDTH - 1,
+	// 		SCREEN_HEIGHT);
 	SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
 	draw_field(renderer);
 	snake_draw(renderer);
 }
+
+#define FRAME_RATE 60
+// snake will move after N_FRAMES_PER_MOVEMENT frames
+#define N_FRAMES_PER_MOVEMENT 10
 
 int main()
 {
@@ -187,10 +204,15 @@ int main()
 	}
 	atexit(SDL_Quit);
 
-	SDL_Window *window;
-	SDL_Renderer *renderer;
-	SDL_CreateWindowAndRenderer(SCREEN_HEIGHT, SCREEN_WIDTH,
-			SDL_WINDOW_FULLSCREEN_DESKTOP, &window, &renderer);
+	SDL_Window *window =
+		SDL_CreateWindow("Snake",
+				SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+				SCREEN_HEIGHT, SCREEN_WIDTH,
+				SDL_WINDOW_FULLSCREEN_DESKTOP
+		);
+	SDL_Renderer *renderer = SDL_CreateRenderer(window, -1,
+			SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+
 	// make the scaled rendering look smoother.
 	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
 	SDL_RenderSetLogicalSize(renderer, SCREEN_WIDTH, SCREEN_HEIGHT);
@@ -202,9 +224,10 @@ int main()
 	// printf("%d %d\n", w, h);
 
 	int quit = 0;
-	snake_init(5, 100, 100, RIGHT);
+	snake_init(5, 0, 4, RIGHT);
 	draw_screen(renderer);
 	bool last_move_drawn = true;
+	int n_frames_mod = 0;
 	while (!quit) {
 		SDL_Event event;
 		while (SDL_PollEvent(&event)) {
@@ -250,12 +273,14 @@ int main()
 			}
 		}
 
-		snake_move(snake);
-		last_move_drawn = true;
+		if (n_frames_mod == 0) {
+			snake_move(snake);
+			last_move_drawn = true;
+		}
 
-		SDL_Delay(100);
 		draw_screen(renderer);
 		SDL_RenderPresent(renderer);
+		n_frames_mod = (n_frames_mod + 1) % N_FRAMES_PER_MOVEMENT;
 	}
 
 	SDL_DestroyRenderer(renderer);
