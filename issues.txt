@@ -3,3 +3,7 @@ snake
 E.g. Snake moving right, left direction should not be accepted.
 However I can press up and left quickly to change the direction to left.
 Solved.
+
+Movement of the snake can be done in an easier way, each segment will occupy
+the previous position of the preceding segment(except the head, whose
+position would depend on the direction).
